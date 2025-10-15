@@ -5,11 +5,19 @@
   "description": "Auto set video playback for different website",
   "author": "showwwwww",
   "scripts": {
-    "dev": "plasmo dev",
+    "dev": "concurrently \"yarn watch:css\" \"yarn plasmo dev\"",
     "build": "plasmo build",
-    "package": "plasmo package"
+    "package": "plasmo package",
+    "postinstall": "node scripts/patch.js",
+    "watch:css": "npx @tailwindcss/cli -i ./src/styles/globals.css -o ./src/styles/build.css --minify --watch",
+    "build:css": "npx @tailwindcss/cli -i ./src/styles/globals.css -o ./src/styles/build.css --minify"
   },
   "dependencies": {
+    "@radix-ui/react-accordion": "^1.2.12",
+    "@radix-ui/react-label": "^2.1.7",
+    "@radix-ui/react-scroll-area": "^1.2.10",
+    "@radix-ui/react-slider": "^1.3.6",
+    "@radix-ui/react-tooltip": "^1.2.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.545.0",
@@ -21,11 +29,17 @@
   },
   "devDependencies": {
     "@ianvs/prettier-plugin-sort-imports": "4.1.1",
+    "@tailwindcss/cli": "^4.1.14",
+    "@tailwindcss/postcss": "^4.1.14",
     "@types/chrome": "0.0.258",
     "@types/node": "20.11.5",
     "@types/react": "18.2.48",
     "@types/react-dom": "18.2.18",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.1",
+    "postcss": "^8.5.6",
     "prettier": "3.2.4",
+    "tailwindcss": "^4.1.14",
     "typescript": "5.3.3"
   },
   "manifest": {
