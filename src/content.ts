@@ -20,5 +20,8 @@ backend.addEventListener('changePlayback', ({ playbackRate }) => {
 });
 
 backend.addEventListener('getURI', (_, __, sendResponse) => {
-  sendResponse({ href: location.href, hostname: location.hostname });
+  sendResponse({
+    href: location.href,
+    hostname: location.hostname,
+  });
 });

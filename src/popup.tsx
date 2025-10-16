@@ -14,37 +14,32 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import client from '@/msg/client';
-import React from 'react';
+import { observer } from 'mobx-react-lite';
+import React, { Suspense } from 'react';
 
 import Store from './store';
 
 import '@/styles/build.css';
 
-import type { hostname } from 'os';
+import ViewModel, { type WebsiteItem } from './viewModel';
 
-function Item({
+const Item = observer(function ({
   id,
-  label,
-  value,
-  action,
+  record,
 }: {
   id: string;
-  label: string;
-  value: number;
-  action: (value: number) => void;
+  record: WebsiteItem;
 }) {
-  const [val, setVal] = React.useState([value]);
-  console.log('val', val, value);
   return (
-    <div className="flex items-center space-x-2 h-8">
+    <div className="flex items-center space-x-2 pr-1 h-8">
       <Tooltip>
         <TooltipTrigger>
-          <Label htmlFor={id} className="max-w-16 truncate block">
-            {label}
+          <Label htmlFor={id} className="max-w-24 truncate block">
+            {record.name}
           </Label>
         </TooltipTrigger>
         <TooltipContent side="top" className="max-w-xs truncate">
-          {label}
+          {record.name}
         </TooltipContent>
       </Tooltip>
       <Slider
@@ -52,45 +47,27 @@ function Item({
         className="flex-1"
         max={4}
         step={0.5}
-        value={val}
+        value={[record.playbackRate]}
         onValueChange={(value) => {
-          setVal(value);
-          action(value[0]);
+          record.playbackRate = value[0];
         }}
       />
     </div>
   );
-}
+});
 
-function setupPlaybackRate(hostname: string, URI: string) {
-  const record = Store.instance.getRecord(hostname, URI);
-  const data = Store.instance.getStoreData(hostname);
-  if (record) {
-    client.request('changePlayback', {
-      playbackRate: record.playbackRate,
-    });
-  } else if (data) {
-    client.request('changePlayback', {
-      playbackRate: data?.default || 1,
-    });
-  } else {
-    Store.instance.setStoreData(hostname, { name: hostname, default: 1 });
+const ViewModelContext = React.createContext<ViewModel>(null);
+
+const useViewModel = () => {
+  const context = React.useContext(ViewModelContext);
+  if (!context) {
+    throw new Error('useViewModel must be used within a ViewModelProvider');
   }
-}
+  return context;
+};
 
-function IndexPopup() {
-  const [website, setWebsite] = React.useState({ hostname: '', href: '' });
-  React.useEffect(() => {
-    client.request('getURI').then(({ href, hostname }) => {
-      setWebsite({ hostname: hostname, href });
-      setupPlaybackRate(hostname, href);
-    });
-  }, []);
-  const data = React.useMemo(
-    () => Store.instance.getStoreData(website.hostname),
-    [website],
-  );
-  console.log(data);
+const Page = observer(function () {
+  const website = useViewModel();
   return (
     <Card className="w-xs gap-3">
       <CardHeader>
@@ -104,53 +81,19 @@ function IndexPopup() {
           defaultValue="item-1">
           <AccordionItem value="item-1">
             <AccordionTrigger className="text-2xl">
-              {data?.name || website.hostname}
+              {website.currentName}
             </AccordionTrigger>
             <AccordionContent className="flex flex-col gap-4 text-balance">
               <ScrollArea className="h-96 w-full">
                 <Item
-                  id="root"
-                  label="Default"
-                  value={data?.default || 1}
-                  action={(value) => {
-                    const record = Store.instance.getRecord(
-                      website.hostname,
-                      website.href,
-                    );
-                    if (!record) {
-                      client.request('changePlayback', {
-                        playbackRate: value,
-                      });
-                    }
-                    Store.instance.updateStoreData(
-                      website.hostname,
-                      (record) => {
-                        record.default = value;
-                        record.name = website.hostname;
-                        return record;
-                      },
-                    );
-                  }}
+                  id={website.hostWebsite.url}
+                  record={website.hostWebsite}
                 />
-                {Object.entries(data?.children || {}).map(([URI, record]) => (
+                {website.websiteItems.map((item, index) => (
                   <Item
-                    key={URI}
-                    id={URI}
-                    label={record.name}
-                    value={record.playbackRate}
-                    action={(value) => {
-                      client.request('changePlayback', {
-                        playbackRate: value,
-                      });
-                      Store.instance.updateRecord(
-                        website.hostname,
-                        URI,
-                        (record) => {
-                          record.playbackRate = value;
-                          return record;
-                        },
-                      );
-                    }}
+                    key={`${item.url}-${index}`}
+                    id={item.url}
+                    record={item}
                   />
                 ))}
               </ScrollArea>
@@ -160,6 +103,46 @@ function IndexPopup() {
       </CardContent>
     </Card>
   );
-}
+});
+
+const IndexPopup = observer(function () {
+  const [uriData, setUriData] = React.useState<{
+    href: string;
+    hostname: string;
+    favIconUrl: string;
+  }>(null);
+  React.useEffect(() => {
+    const fetchUriData = async () => {
+      try {
+        const uri = await client.request('getURI');
+        chrome.tabs.query(
+          { active: true, currentWindow: true },
+          function (tabs) {
+            const favIconUrl = tabs[0]?.favIconUrl || '';
+            setUriData({ ...uri, favIconUrl });
+          },
+        );
+      } catch (error) {
+        console.error('Failed to fetch URI:', error);
+      }
+    };
+
+    fetchUriData();
+  }, []);
+  if (!uriData) {
+    return <div className="p-4">Loading...</div>;
+  }
+  return (
+    <ViewModelContext.Provider
+      value={ViewModel.getInstance(
+        uriData.hostname,
+        uriData.href,
+        uriData.favIconUrl,
+        Store.instance,
+      )}>
+      <Page />
+    </ViewModelContext.Provider>
+  );
+});
 
 export default IndexPopup;
